@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LLM Chat with Database</title>
+  <style>
+    body { font-family: sans-serif; margin: 30px; background: #f6f6f6; }
+    #chat { width: 100%; max-width: 600px; margin: auto; }
+    textarea { width: 100%; font-size: 1.1em; }
+    button { font-size: 1.1em; padding: 0.5em 1em; margin-top: 10px; }
+    #results { margin-top: 2em; white-space: pre-wrap; background: #fff; padding: 1em; border-radius: 8px; box-shadow: 0 0 4px #ccc; }
+  </style>
+</head>
+<body>
+  <div id="chat">
+    <h2>Ask your database</h2>
+    <textarea id="question" rows="2" placeholder="Type your question, e.g. 'List all users from Germany'"></textarea>
+    <br>
+    <button onclick="askDB()">Ask</button>
+    <div id="results"></div>
+  </div>
+
+  <script>
+    async function askDB() {
+      const q = document.getElementById('question').value;
+      document.getElementById('results').innerText = 'Loading...';
+      const res = await fetch('http://localhost:8000/ask_db', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({question: q})
+      });
+      const data = await res.json();
+      if (data.detail) {
+        document.getElementById('results').innerText = 'Error: ' + data.detail;
+        return;
+      }
+      let output = `SQL: ${data.sql}\n\nResults:\n`;
+      if (Array.isArray(data.results)) {
+        output += data.results.map(row => JSON.stringify(row)).join('\n');
+      } else {
+        output += JSON.stringify(data.results);
+      }
+      document.getElementById('results').innerText = output;
+    }
+  </script>
+</body>
+</html>
