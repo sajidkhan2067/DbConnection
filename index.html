@@ -9,38 +9,91 @@
     textarea { width: 100%; font-size: 1.1em; }
     button { font-size: 1.1em; padding: 0.5em 1em; margin-top: 10px; }
     #results { margin-top: 2em; white-space: pre-wrap; background: #fff; padding: 1em; border-radius: 8px; box-shadow: 0 0 4px #ccc; }
+    #voice-status { margin-left: 12px; font-size: 1em; color: #2a7f2a; }
   </style>
 </head>
 <body>
   <div id="chat">
     <h2>Ask your database</h2>
-    <textarea id="question" rows="2" placeholder="Type your question, e.g. 'List all users from Germany'"></textarea>
+    <textarea id="question" rows="2" placeholder="Type your question, or use the mic!"></textarea>
     <br>
     <button onclick="askDB()">Ask</button>
+    <button onclick="startRecognition()" id="voiceBtn">🎤 Speak</button>
+    <span id="voice-status"></span>
     <div id="results"></div>
   </div>
 
   <script>
     async function askDB() {
       const q = document.getElementById('question').value;
-      document.getElementById('results').innerText = 'Loading...';
-      const res = await fetch('http://localhost:8000/ask_db', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({question: q})
-      });
-      const data = await res.json();
-      if (data.detail) {
-        document.getElementById('results').innerText = 'Error: ' + data.detail;
+      if (!q.trim()) {
+        document.getElementById('results').innerText = 'Please enter a question or use the mic.';
         return;
       }
-      let output = `SQL: ${data.sql}\n\nResults:\n`;
-      if (Array.isArray(data.results)) {
-        output += data.results.map(row => JSON.stringify(row)).join('\n');
-      } else {
-        output += JSON.stringify(data.results);
+      document.getElementById('results').innerText = 'Loading...';
+      document.getElementById('voice-status').innerText = '';
+      try {
+        const res = await fetch('http://localhost:8000/ask_db', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({question: q})
+        });
+        const data = await res.json();
+        if (data.detail) {
+          document.getElementById('results').innerText = 'Error: ' + data.detail;
+          return;
+        }
+        let output = `SQL: ${data.sql}\n\nResults:\n`;
+        if (Array.isArray(data.results)) {
+          output += data.results.map(row => JSON.stringify(row)).join('\n');
+        } else {
+          output += JSON.stringify(data.results);
+        }
+        document.getElementById('results').innerText = output;
+      } catch (err) {
+        document.getElementById('results').innerText = 'Network error: ' + err;
       }
-      document.getElementById('results').innerText = output;
+    }
+
+    // Audio to text input
+    let recognition;
+    let isRecording = false;
+
+    function startRecognition() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Sorry, your browser does not support Speech Recognition.');
+        return;
+      }
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      document.getElementById('voice-status').innerText = 'Listening...';
+      isRecording = true;
+      recognition.start();
+
+      recognition.onresult = function(event) {
+        isRecording = false;
+        let transcript = event.results[0][0].transcript;
+        document.getElementById('question').value = transcript;
+        document.getElementById('voice-status').innerText = '✔️ ' + transcript;
+        // Auto-send the question when done:
+        askDB();
+      };
+
+      recognition.onerror = function(event) {
+        isRecording = false;
+        document.getElementById('voice-status').innerText = '❌ ' + event.error;
+      };
+
+      recognition.onend = function() {
+        if (isRecording) {
+          document.getElementById('voice-status').innerText = '';
+          isRecording = false;
+        }
+      };
     }
   </script>
 </body>
